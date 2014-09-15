@@ -37,7 +37,7 @@ Performing REST-Requests results in following HTTP-Responses:
         	"subResource": {
             	"_links": {
                 	"self": "http://localhost/resources/1/sub-resources/26/"
-                	"subSubResource": ""http://localhost/resources/1/sub-resources/26/sub-sub-resources/3""
+                	"subSubResource": "http://localhost/resources/1/sub-resources/26/sub-sub-resources/3"
             	},
             	"id": 26,
             	"name": "Sub Resource 26"
@@ -47,7 +47,7 @@ Performing REST-Requests results in following HTTP-Responses:
 	
 Field customization can be declared using the URL-Query-Parameter 'fields':
 
-	GET http://localhost/api/resources/1/?fields=id,subResource.fields(name,subSubResource.id) HTTP/1.1
+	GET http://localhost/api/resources/1/?fields=id,subResource.fields(name,subSubResource.fields(id) HTTP/1.1
 	Content-Type  application/hal+json	
 
 	{
