@@ -21,9 +21,6 @@ class NestedHalSerializerMixin():
 
 
 class NestedHalLinksSerializer(NestedHalSerializerMixin, HyperlinkedModelSerializer):
-    def __init__(self, parentMeta, *args, **kwargs):
-        super(NestedHalLinksSerializer, self).__init__(parentMeta, *args, **kwargs)
-
     def getOptions(self, meta):
         options = super(NestedHalLinksSerializer, self).getOptions(meta)
         if options.depth > 0:
@@ -33,13 +30,16 @@ class NestedHalLinksSerializer(NestedHalSerializerMixin, HyperlinkedModelSeriali
     def get_default_fields(self):
         fields = super(NestedHalLinksSerializer, self).get_default_fields()
         resultingFields = {key: field for key, field in fields.items() if
-                           (isinstance(field, RelatedField) and key not in self.opts.nestedFields) \
+                           (isinstance(field, RelatedField) and key not in self.opts.nestedFields)
                            or isinstance(field, HyperlinkedIdentityField)}
         self.opts.fields = [field for field in self.opts.fields if field in resultingFields.keys()]
         return resultingFields
 
 
 class NestedHalEmbeddedSerializer(NestedHalSerializerMixin, ModelSerializer):
+
+    _model_serializer_class = None  # we cannot set a default because it's a circular dependency
+
     def getOptions(self, meta):
         options = super(NestedHalEmbeddedSerializer, self).getOptions(meta)
         if options.nestedFields:
@@ -53,7 +53,7 @@ class NestedHalEmbeddedSerializer(NestedHalSerializerMixin, ModelSerializer):
         return resultingFields
 
     def get_nested_field(self, model_field, related_model, to_many):
-        class NestedModelSerializer(HalModelSerializer):
+        class NestedModelSerializer(self._model_serializer_class):
             class Meta:
                 model = related_model
                 depth = self.opts.depth - 1
@@ -75,7 +75,7 @@ class NestedHalEmbeddedSerializer(NestedHalSerializerMixin, ModelSerializer):
 
         customFields = self.opts.nestedFields.get(fieldName)
         if customFields is not None:
-            class CustomFieldSerializer(HalModelSerializer):
+            class CustomFieldSerializer(self._model_serializer_class):
                 class Meta:
                     model = related_model
                     fields = ['self'] + customFields[0] + list(customFields[1].keys())
@@ -95,13 +95,15 @@ class HalModelSerializerOptions(HyperlinkedModelSerializerOptions):
 
 class HalModelSerializer(ModelSerializer):
     _options_class = HalModelSerializerOptions
+    _nested_links_serializer_class = NestedHalLinksSerializer
+    _nested_embedded_serializer_class = NestedHalEmbeddedSerializer
 
     def __init__(self, instance=None, data=None, files=None, context=None, partial=False, many=False,
                  allow_add_remove=False, **kwargs):
+        self._nested_embedded_serializer_class._model_serializer_class = self.__class__
         if data and '_links' not in data:
             data['_links'] = {}  # put links in data, so that field validation does not fail
-        super().__init__(instance, data, files, context, partial, many, allow_add_remove, **kwargs)
-
+        super(HalModelSerializer, self).__init__(instance, data, files, context, partial, many, allow_add_remove, **kwargs)
 
     def get_default_fields(self):
         fields = self._dict_class()
@@ -117,14 +119,14 @@ class HalModelSerializer(ModelSerializer):
             if 'id' not in declaredFields:
                 declaredFields.insert(0, 'id')
             setattr(self.Meta, 'fields', declaredFields)
-        fields['_links'] = NestedHalLinksSerializer(self.Meta, source="*")
+        fields['_links'] = self._nested_links_serializer_class(self.Meta, source="*")
 
         defaultFields = super(HalModelSerializer, self).get_default_fields()
-        fields.update({key: field for key, field in defaultFields.items() if not isinstance(field, RelatedField) \
-                       and not isinstance(field, HyperlinkedIdentityField) and not isinstance(field, Serializer) \
+        fields.update({key: field for key, field in defaultFields.items() if not isinstance(field, RelatedField)
+                       and not isinstance(field, HyperlinkedIdentityField) and not isinstance(field, Serializer)
                        and not (declaredFields and key not in declaredFields)})
         if nested or self.opts.nestedFields:
-            fields['_embedded'] = NestedHalEmbeddedSerializer(self.Meta, source="*")
+            fields['_embedded'] = self._nested_embedded_serializer_class(self.Meta, source="*")
         self.opts.fields = [key for key in fields.keys()]
         return fields
 
@@ -139,14 +141,13 @@ class HalPaginationSerializer(BasePaginationSerializer):
     results_field = '_embedded'
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(HalPaginationSerializer, self).__init__(*args, **kwargs)
 
         class NestedLinksSerializer(Serializer):
             class NestedSelfLinkField(Field):
                 def to_native(self, value):
                     request = self.context.get('request')
-                    url = request and request.build_absolute_uri() or ''
-                    return url
+                    return request and request.build_absolute_uri() or ''
 
             self = NestedSelfLinkField(source='*')
             next = NextPageField(source='*')
