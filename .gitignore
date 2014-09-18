@@ -55,3 +55,6 @@ target/
 
 # idea
 .idea
+
+# Mac DS.Store
+.DS_Store
