@@ -20,7 +20,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
     name='django-rest-hal',
-    version='0.0.1',
+    version='0.0.2',
     packages=['django_rest_hal'],
     # package_data={'django_rest_hal': ['django_rest_hal/*']},
     # include_package_data=True,
