@@ -153,4 +153,7 @@ class HalPaginationSerializer(BasePaginationSerializer):
             next = NextPageField(source='*')
             previous = PreviousPageField(source='*')
 
-        self.fields.insert(0, '_links', NestedLinksSerializer(source="*"))
+        oldFields = self.fields
+        self.fields = self._dict_class()
+        self.fields['_links'] = NestedLinksSerializer(source="*")
+        self.fields.update(oldFields)
