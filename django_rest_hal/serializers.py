@@ -89,8 +89,12 @@ class NestedHalEmbeddedSerializer(NestedHalSerializerMixin, ModelSerializer):
 class HalModelSerializerOptions(HyperlinkedModelSerializerOptions):
     def __init__(self, meta):
         super(HalModelSerializerOptions, self).__init__(None)
+        self.exclude = getattr(meta, 'exclude', ())
         self.model = getattr(meta, 'model', None)
         self.nestedFields = getattr(meta, 'nested_fields', None)
+        self.read_only_fields = getattr(meta, 'read_only_fields', ())
+        self.write_only_fields = getattr(meta, 'write_only_fields', ())
+        self.fields = getattr(meta, 'fields', ())
 
 
 class HalModelSerializer(ModelSerializer):
