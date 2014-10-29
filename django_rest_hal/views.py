@@ -5,17 +5,8 @@ from rest_framework.viewsets import ModelViewSet
 from django_rest_hal.serializers import HalModelSerializer
 
 
-class HalModelViewSet(ModelViewSet):
+class CustomNestedFieldsMixin():
     __GET_FIELDS_PATTERN = re.compile(r"([a-zA-Z0-9_-]+?)\.fields\((.*?)\)\Z")
-
-    def get_success_headers(self, data):
-        linksData = data.get('_links')
-        if not linksData:
-            return {}
-        urlFieldData = linksData.get(api_settings.URL_FIELD_NAME)
-        if not urlFieldData:
-            return {}
-        return {'Location': urlFieldData}
 
     def get_serializer_class(self):
         serializer_class = self.serializer_class
@@ -83,3 +74,14 @@ class HalModelViewSet(ModelViewSet):
             foundCustomField += char
         splittedCustomFieldStrs.append(foundCustomField)
         return splittedCustomFieldStrs
+
+
+class HalModelViewSet(CustomNestedFieldsMixin, ModelViewSet):
+    def get_success_headers(self, data):
+        linksData = data.get('_links')
+        if not linksData:
+            return {}
+        urlFieldData = linksData.get(api_settings.URL_FIELD_NAME)
+        if not urlFieldData:
+            return {}
+        return {'Location': urlFieldData}
