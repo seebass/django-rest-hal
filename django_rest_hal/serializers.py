@@ -1,3 +1,4 @@
+import copy
 from rest_framework.compat import get_concrete_model
 from rest_framework.fields import Field
 from rest_framework.pagination import BasePaginationSerializer, NextPageField, PreviousPageField
@@ -37,7 +38,6 @@ class NestedHalLinksSerializer(NestedHalSerializerMixin, HyperlinkedModelSeriali
 
 
 class NestedHalEmbeddedSerializer(NestedHalSerializerMixin, ModelSerializer):
-
     _model_serializer_class = None  # we cannot set a default because it's a circular dependency
 
     def getOptions(self, meta):
@@ -109,34 +109,79 @@ class HalModelSerializer(ModelSerializer):
             data['_links'] = {}  # put links in data, so that field validation does not fail
         super(HalModelSerializer, self).__init__(instance, data, files, context, partial, many, allow_add_remove, **kwargs)
 
-    def get_default_fields(self):
+    def get_fields(self):
         fields = self._dict_class()
+
         nested = bool(getattr(self.Meta, 'depth', 0))
         if self.init_data:  # if init_data is set, a post/put request is handled and nested fields are ignored
             setattr(self.Meta, 'nestedFields', {})
             self.opts.nestedFields = {}
 
-        declaredFields = list(getattr(self.Meta, 'fields', []))
-        if declaredFields:
-            if 'self' not in declaredFields:
-                declaredFields.insert(0, 'self')
-            if 'id' not in declaredFields:
-                declaredFields.insert(0, 'id')
-            setattr(self.Meta, 'fields', declaredFields)
+        declared_fields = self.__get_declared_fields()
+        setattr(self.Meta, 'fields', declared_fields)
+
         fields['_links'] = self._nested_links_serializer_class(self.Meta, source="*")
 
-        defaultFields = super(HalModelSerializer, self).get_default_fields()
-        fields.update({key: field for key, field in defaultFields.items() if not isinstance(field, RelatedField)
-                       and not isinstance(field, HyperlinkedIdentityField) and not isinstance(field, Serializer)
-                       and not (declaredFields and key not in declaredFields)})
+        self.__add_fields_if_absent(fields, copy.deepcopy(self.base_fields), declared_fields)
+        self.__add_fields_if_absent(fields, self.get_default_fields(), declared_fields)
+
         if nested or self.opts.nestedFields:
             fields['_embedded'] = self._nested_embedded_serializer_class(self.Meta, source="*")
-        self.opts.fields = [key for key in fields.keys()]
+
+        for key, field in fields.items():
+            field.initialize(parent=self, field_name=key)
+
         return fields
+
+    # def get_default_fields(self):
+    #     fields = self._dict_class()
+    #     nested = bool(getattr(self.Meta, 'depth', 0))
+    #     if self.init_data:  # if init_data is set, a post/put request is handled and nested fields are ignored
+    #         setattr(self.Meta, 'nestedFields', {})
+    #         self.opts.nestedFields = {}
+    #
+    #     declaredFields = list(getattr(self.Meta, 'fields', []))
+    #     if declaredFields:
+    #         if 'self' not in declaredFields:
+    #             declaredFields.insert(0, 'self')
+    #         if 'id' not in declaredFields:
+    #             declaredFields.insert(0, 'id')
+    #         setattr(self.Meta, 'fields', declaredFields)
+    #     fields['_links'] = self._nested_links_serializer_class(self.Meta, source="*")
+    #
+    #     defaultFields = super(HalModelSerializer, self).get_default_fields()
+    #     fields.update({key: field for key, field in defaultFields.items() if not isinstance(field, RelatedField)
+    #                    and not isinstance(field, HyperlinkedIdentityField) and not isinstance(field, Serializer)
+    #                    and not (declaredFields and key not in declaredFields)})
+    #     if nested or self.opts.nestedFields:
+    #         fields['_embedded'] = self._nested_embedded_serializer_class(self.Meta, source="*")
+    #     self.opts.fields = [key for key in fields.keys()]
+    #     return fields
 
     def get_pk_field(self, model_field):
         # always include id even it is not set in serializer fields definition
         return self.get_field(model_field)
+
+    def __handle_excludes(self, fields):
+        if self.opts.exclude:
+            assert isinstance(self.opts.exclude, (list, tuple)), '`exclude` must be a list or tuple'
+            for key in self.opts.exclude:
+                fields.pop(key, None)
+
+    def __get_declared_fields(self):
+        declared_fields = list(getattr(self.Meta, 'fields', []))
+        if declared_fields:
+            if 'self' not in declared_fields:
+                declared_fields.insert(0, 'self')
+            if 'id' not in declared_fields:
+                declared_fields.insert(0, 'id')
+        return declared_fields
+
+    @staticmethod
+    def __add_fields_if_absent(fields, add_fields, declared_fields):
+        fields.update({key: field for key, field in add_fields.items() if not isinstance(field, RelatedField)
+                       and not isinstance(field, HyperlinkedIdentityField) and not isinstance(field, Serializer)
+                       and not (declared_fields and key not in declared_fields) and not key in fields})
 
 
 class HalPaginationSerializer(BasePaginationSerializer):
