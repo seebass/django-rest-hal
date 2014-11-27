@@ -45,7 +45,7 @@ class NestedHalLinksSerializer(NestedHalSerializerMixin, HyperlinkedModelSeriali
                 fields[key] = field
             if isinstance(field, Serializer):
                 view_name = field.opts.model.__name__.lower() + "-detail"
-                fields[key] = HyperlinkedRelatedField(many=field.many, source=field.source, view_name=view_name)
+                fields[key] = self._hyperlink_field_class(many=field.many, source=field.source, view_name=view_name)
 
 
 class NestedHalEmbeddedSerializer(NestedHalSerializerMixin, ModelSerializer):
@@ -84,8 +84,10 @@ class NestedHalEmbeddedSerializer(NestedHalSerializerMixin, ModelSerializer):
             reverse_rels = opts.get_all_related_objects()
             reverse_rels += opts.get_all_related_many_to_many_objects()
             for relation in reverse_rels:
-                if relation.model == related_model:
-                    fieldName = relation.get_accessor_name()
+                accessorName = relation.get_accessor_name()
+                if relation.model == related_model and accessorName in self.opts.nestedFields:
+                    fieldName = accessorName
+                    break
 
         customFields = self.opts.nestedFields.get(fieldName)
         if customFields is not None:
@@ -149,35 +151,12 @@ class HalModelSerializer(ModelSerializer):
         if nested or self.opts.nestedFields:
             fields['_embedded'] = self._nested_embedded_serializer_class(self.Meta, source="*")
 
+        self.__handle_excludes(fields)
+
         for key, field in fields.items():
             field.initialize(parent=self, field_name=key)
 
         return fields
-
-    # def get_default_fields(self):
-    # fields = self._dict_class()
-    #     nested = bool(getattr(self.Meta, 'depth', 0))
-    #     if self.init_data:  # if init_data is set, a post/put request is handled and nested fields are ignored
-    #         setattr(self.Meta, 'nestedFields', {})
-    #         self.opts.nestedFields = {}
-    #
-    #     declaredFields = list(getattr(self.Meta, 'fields', []))
-    #     if declaredFields:
-    #         if 'self' not in declaredFields:
-    #             declaredFields.insert(0, 'self')
-    #         if 'id' not in declaredFields:
-    #             declaredFields.insert(0, 'id')
-    #         setattr(self.Meta, 'fields', declaredFields)
-    #     fields['_links'] = self._nested_links_serializer_class(self.Meta, source="*")
-    #
-    #     defaultFields = super(HalModelSerializer, self).get_default_fields()
-    #     fields.update({key: field for key, field in defaultFields.items() if not isinstance(field, RelatedField)
-    #                    and not isinstance(field, HyperlinkedIdentityField) and not isinstance(field, Serializer)
-    #                    and not (declaredFields and key not in declaredFields)})
-    #     if nested or self.opts.nestedFields:
-    #         fields['_embedded'] = self._nested_embedded_serializer_class(self.Meta, source="*")
-    #     self.opts.fields = [key for key in fields.keys()]
-    #     return fields
 
     def get_pk_field(self, model_field):
         # always include id even it is not set in serializer fields definition
