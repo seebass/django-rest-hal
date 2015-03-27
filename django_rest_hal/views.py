@@ -30,6 +30,7 @@ class CustomNestedFieldsMixin():
         request = self.get_serializer_context().get('request')
         if request:
             customFieldsStr = request.QUERY_PARAMS.get('fields')
+            noLinks = request.QUERY_PARAMS.get('no-links') == 'true'
             if customFieldsStr:
                 customFields, customNestedFields = self.__getCustomFields(customFieldsStr)
 
@@ -38,7 +39,15 @@ class CustomNestedFieldsMixin():
                         model = self.model
                         fields = customFields + list(customNestedFields.keys())
                         nested_fields = customNestedFields
+                        no_links = noLinks
                         exclude = None
+
+                return CustomFieldSerializer
+            elif noLinks:
+                class CustomFieldSerializer(baseSerializerClass):
+                    class Meta:
+                        model = self.model
+                        no_links = noLinks
 
                 return CustomFieldSerializer
         return None

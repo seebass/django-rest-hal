@@ -18,6 +18,7 @@ class NestedHalSerializerMixin():
     def getOptions(self, meta):
         options = HyperlinkedModelSerializerOptions(self._parentMeta)
         options.nestedFields = getattr(self._parentMeta, 'nested_fields', dict())
+        options.noLinks = getattr(self._parentMeta, 'no_links', dict())
         return options
 
 
@@ -96,6 +97,7 @@ class NestedHalEmbeddedSerializer(NestedHalSerializerMixin, ModelSerializer):
                     model = related_model
                     fields = ['self'] + customFields[0] + list(customFields[1].keys())
                     nested_fields = customFields[1]
+                    no_links = self.opts.noLinks
                     exclude = None
 
             return CustomFieldSerializer(many=to_many)
@@ -115,6 +117,7 @@ class HalModelSerializerOptions(HyperlinkedModelSerializerOptions):
         self.read_only_fields = getattr(meta, 'read_only_fields', ())
         self.write_only_fields = getattr(meta, 'write_only_fields', ())
         self.fields = getattr(meta, 'fields', ())
+        self.noLinks = getattr(meta, 'no_links', False)
 
 
 class HalModelSerializer(ModelSerializer):
@@ -143,7 +146,8 @@ class HalModelSerializer(ModelSerializer):
         base_fields = copy.deepcopy(self.base_fields)
         setattr(self.Meta, 'base_fields', base_fields)
 
-        fields['_links'] = self._nested_links_serializer_class(self.Meta, source="*")
+        if not self.opts.noLinks:
+            fields['_links'] = self._nested_links_serializer_class(self.Meta, source="*")
 
         self.__add_fields_if_absent(fields, base_fields, declared_fields)
         self.__add_fields_if_absent(fields, self.get_default_fields(), declared_fields)
@@ -171,15 +175,15 @@ class HalModelSerializer(ModelSerializer):
     def __get_declared_fields(self):
         declared_fields = list(getattr(self.Meta, 'fields', []))
         if declared_fields:
-            if 'self' not in declared_fields:
+            if 'self' not in declared_fields and not self.opts.noLinks:
                 declared_fields.insert(0, 'self')
             if 'id' not in declared_fields:
                 declared_fields.insert(0, 'id')
         return declared_fields
 
-    @staticmethod
-    def __add_fields_if_absent(fields, add_fields, declared_fields):
-        fields.update({key: field for key, field in add_fields.items() if not isinstance(field, RelatedField)
+    def __add_fields_if_absent(self, fields, add_fields, declared_fields):
+        fields.update({key: field for key, field in add_fields.items() if
+                       (not isinstance(field, RelatedField) or self.opts.noLinks)
                        and not isinstance(field, HyperlinkedIdentityField) and not isinstance(field, Serializer)
                        and not (declared_fields and key not in declared_fields) and not key in fields})
 
