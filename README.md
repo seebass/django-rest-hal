@@ -7,6 +7,7 @@ Includes:
 
 * HAL Implemenentation without 'curies'
 * Defining fields through url-parameter 'fields'
+* Disable link generation through url-parameter 'no-links=true'
 
 
 ## Setup ##
