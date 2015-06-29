@@ -9,6 +9,10 @@ Includes:
 * Defining fields through url-parameter 'fields'
 * Disable link generation through url-parameter 'no-links=true'
 
+For Django REST Framework 3 the have a look at these libs:
+
+* https://github.com/seebass/drf-hal-json
+* https://github.com/seebass/drf-nested-fields
 
 ## Setup ##
 
